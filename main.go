@@ -22,7 +22,6 @@ func main() {
 		resp, err := http.Get(serverURL)
 		if err != nil {
 			errorCount++
-			fmt.Println("Ошибка при запросе:", err)
 			if errorCount >= maxErrors {
 				fmt.Println("Unable to fetch server statistic.")
 				return
@@ -33,12 +32,12 @@ func main() {
 
 		if resp.StatusCode != http.StatusOK {
 			errorCount++
-			fmt.Printf("Неверный статус код: %d\n", resp.StatusCode)
 			if errorCount >= maxErrors {
 				fmt.Println("Unable to fetch server statistic.")
 				return
 			}
 			time.Sleep(interval)
+			resp.Body.Close()
 			continue
 		}
 
@@ -46,7 +45,6 @@ func main() {
 		resp.Body.Close()
 		if err != nil {
 			errorCount++
-			fmt.Println("Ошибка чтения тела ответа:", err)
 			if errorCount >= maxErrors {
 				fmt.Println("Unable to fetch server statistic.")
 				return
@@ -58,7 +56,6 @@ func main() {
 		data := strings.Split(strings.TrimSpace(string(body)), ",")
 		if len(data) != 7 {
 			errorCount++
-			fmt.Println("Неверный формат данных")
 			if errorCount >= maxErrors {
 				fmt.Println("Unable to fetch server statistic.")
 				return
@@ -67,7 +64,7 @@ func main() {
 			continue
 		}
 
-		errorCount = 0 // Сброс ошибок при успешном получении данных
+		errorCount = 0 // сброс ошибок
 
 		loadAvg, _ := strconv.ParseFloat(data[0], 64)
 		memTotal, _ := strconv.ParseFloat(data[1], 64)
@@ -78,12 +75,12 @@ func main() {
 		netUsage, _ := strconv.ParseFloat(data[6], 64)
 
 		if loadAvg > 30 {
-			fmt.Printf("Load Average is too high: %.2f\n", loadAvg)
+			fmt.Printf("Load Average is too high: %d\n", int(loadAvg))
 		}
 
 		memPercent := (memUsage / memTotal) * 100
 		if memPercent > 80 {
-			fmt.Printf("Memory usage too high: %.2f%%\n", memPercent)
+			fmt.Printf("Memory usage too high: %d%%\n", int(memPercent))
 		}
 
 		diskFreeMb := (diskTotal - diskUsage) / (1024 * 1024)
@@ -91,12 +88,12 @@ func main() {
 			diskFreeMb = 0
 		}
 		if (diskTotal-diskUsage)/diskTotal < 0.1 {
-			fmt.Printf("Free disk space is too low: %.2f Mb left\n", diskFreeMb)
+			fmt.Printf("Free disk space is too low: %d Mb left\n", int(diskFreeMb))
 		}
 
 		netAvailableMbit := ((netTotal - netUsage) / 1024 / 1024) * 8
 		if (netUsage / netTotal) > 0.9 {
-			fmt.Printf("Network bandwidth usage high: %.2f Mbit/s available\n", netAvailableMbit)
+			fmt.Printf("Network bandwidth usage high: %d Mbit/s available\n", int(netAvailableMbit))
 		}
 
 		time.Sleep(interval)
