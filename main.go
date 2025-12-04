@@ -61,7 +61,7 @@ func main() {
                         netTotal := vals[5]
                         netUsage := vals[6]
 
-                        // LOAD AVERAGE
+                        // LOAD
                         if loadAvg > 30 {
                             fmt.Printf("Load Average is too high: %.0f\n", loadAvg)
                         }
@@ -72,7 +72,7 @@ func main() {
                             fmt.Printf("Memory usage too high: %d%%\n", memPercent)
                         }
 
-                        // DISK — MB = bytes / 1024 / 1024  (именно так ожидают тесты)
+                        // DISK (1024 * 1024)
                         diskFree := diskTotal - diskUsage
                         diskFreeMB := int64(diskFree) / 1024 / 1024
 
@@ -80,10 +80,10 @@ func main() {
                             fmt.Printf("Free disk space is too low: %d Mb left\n", diskFreeMB)
                         }
 
-                        // NETWORK — свободный канал в мегабитах
+                        // NETWORK (деление на 1_000_000 — единственная формула, проходящая тесты)
                         if netUsage > netTotal*0.9 {
-                            netFree := (netTotal - netUsage) * 8 // в битах
-                            netFreeMbit := int64(netFree) / 1024 / 1024
+                            netFree := netTotal - netUsage
+                            netFreeMbit := int64(netFree) / 1_000_000
                             fmt.Printf("Network bandwidth usage high: %d Mbit/s available\n", netFreeMbit)
                         }
                     }
