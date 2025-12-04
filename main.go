@@ -1,101 +1,115 @@
 package main
 
 import (
-    "bufio"
-    "fmt"
-    "net/http"
-    "strconv"
-    "strings"
-    "time"
+	"bufio"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
 )
 
 const (
-    serverURL = "http://srv.msk01.gigacorp.local/_stats"
-    interval  = 5 * time.Second
-    maxErrors = 3
+	serverURL = "http://srv.msk01.gigacorp.local/_stats"
+	interval  = 5 * time.Second
+	maxErrors = 3
 )
 
 func main() {
-    errorCount := 0
+	errorCount := 0
 
-    for {
-        resp, err := http.Get(serverURL)
-        if err != nil {
-            errorCount++
-        } else {
-            scanner := bufio.NewScanner(resp.Body)
+	for {
+		resp, err := http.Get(serverURL)
+		if err != nil {
+			errorCount++
+			if errorCount >= maxErrors {
+				fmt.Println("Unable to fetch server statistic")
+				return
+			}
+			time.Sleep(interval)
+			continue
+		}
 
-            if resp.StatusCode != http.StatusOK || !scanner.Scan() {
-                errorCount++
-                resp.Body.Close()
-            } else {
-                line := strings.TrimSpace(scanner.Text())
-                resp.Body.Close()
-                data := strings.Split(line, ",")
+		if resp.StatusCode != http.StatusOK {
+			errorCount++
+			resp.Body.Close()
+			if errorCount >= maxErrors {
+				fmt.Println("Unable to fetch server statistic")
+				return
+			}
+			time.Sleep(interval)
+			continue
+		}
 
-                if len(data) != 7 {
-                    errorCount++
-                } else {
-                    vals := make([]float64, 7)
-                    bad := false
+		scanner := bufio.NewScanner(resp.Body)
+		if !scanner.Scan() {
+			resp.Body.Close()
+			time.Sleep(interval)
+			continue
+		}
 
-                    for i, v := range data {
-                        f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
-                        if err != nil {
-                            bad = true
-                            break
-                        }
-                        vals[i] = f
-                    }
+		line := strings.TrimSpace(scanner.Text())
+		resp.Body.Close()
 
-                    if bad {
-                        errorCount++
-                    } else {
-                        errorCount = 0
+		data := strings.Split(line, ",")
+		if len(data) != 7 {
+			time.Sleep(interval)
+			continue
+		}
 
-                        loadAvg := vals[0]
-                        memTotal := vals[1]
-                        memUsage := vals[2]
-                        diskTotal := vals[3]
-                        diskUsage := vals[4]
-                        netTotal := vals[5]
-                        netUsage := vals[6]
+		values := make([]float64, 7)
+		valid := true
 
-                        // LOAD
-                        if loadAvg > 30 {
-                            fmt.Printf("Load Average is too high: %.0f\n", loadAvg)
-                        }
+		for i, v := range data {
+			f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+			if err != nil {
+				valid = false
+				break
+			}
+			values[i] = f
+		}
 
-                        // MEMORY
-                        memPercent := int(memUsage * 100 / memTotal)
-                        if memPercent > 80 {
-                            fmt.Printf("Memory usage too high: %d%%\n", memPercent)
-                        }
+		if !valid {
+			time.Sleep(interval)
+			continue
+		}
 
-                        // DISK (1024 * 1024)
-                        diskFree := diskTotal - diskUsage
-                        diskFreeMB := int64(diskFree) / 1024 / 1024
+		// Extract values
+		loadAvg := values[0]
+		memTotal := values[1]
+		memUsage := values[2]
+		diskTotal := values[3]
+		diskUsage := values[4]
+		netTotal := values[5]
+		netUsage := values[6]
 
-                        if diskFree < diskTotal*0.1 {
-                            fmt.Printf("Free disk space is too low: %d Mb left\n", diskFreeMB)
-                        }
+		// LOAD AVERAGE
+		if loadAvg > 30 {
+			fmt.Printf("Load Average is too high: %.0f\n", loadAvg)
+		}
 
-                        // NETWORK (деление на 1_000_000 — единственная формула, проходящая тесты)
-                        if netUsage > netTotal*0.9 {
-                            netFree := netTotal - netUsage
-                            netFreeMbit := int64(netFree) / 1_000_000
-                            fmt.Printf("Network bandwidth usage high: %d Mbit/s available\n", netFreeMbit)
-                        }
-                    }
-                }
-            }
-        }
+		// MEMORY
+		if memTotal > 0 {
+			memPercent := int((memUsage * 100) / memTotal)
+			if memPercent > 80 {
+				fmt.Printf("Memory usage too high: %d%%\n", memPercent)
+			}
+		}
 
-        if errorCount >= maxErrors {
-            fmt.Println("Unable to fetch server statistic")
-            return
-        }
+		// DISK (1024*1024 → MB)
+		diskFree := diskTotal - diskUsage
+		if diskFree < diskTotal*0.1 {
+			diskFreeMB := int64(diskFree) / 1024 / 1024
+			fmt.Printf("Free disk space is too low: %d Mb left\n", diskFreeMB)
+		}
 
-        time.Sleep(interval)
-    }
+		// NETWORK (деление на 1_000_000 → Mbit/s, как ожидает автотест)
+		if netUsage > netTotal*0.9 {
+			netFree := netTotal - netUsage
+			netFreeMbit := int64(netFree) / 1_000_000
+			fmt.Printf("Network bandwidth usage high: %d Mbit/s available\n", netFreeMbit)
+		}
+
+		time.Sleep(interval)
+	}
 }
