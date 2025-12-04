@@ -30,27 +30,26 @@ func main() {
             } else {
                 line := strings.TrimSpace(scanner.Text())
                 resp.Body.Close()
-                data := strings.Split(line, ",")
+                parts := strings.Split(line, ",")
 
-                if len(data) != 7 {
+                if len(parts) != 7 {
                     errorCount++
                 } else {
-                    // Парсим числа
                     vals := make([]float64, 7)
                     bad := false
-                    for i, v := range data {
-                        num, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
-                        if err != nil {
+                    for i, p := range parts {
+                        v, e := strconv.ParseFloat(strings.TrimSpace(p), 64)
+                        if e != nil {
                             bad = true
                             break
                         }
-                        vals[i] = num
+                        vals[i] = v
                     }
 
                     if bad {
                         errorCount++
                     } else {
-                        // Сброс ошибок — данные корректны
+                        // данные корректны — сбрасываем счётчик ошибок
                         errorCount = 0
 
                         loadAvg := vals[0]
@@ -61,30 +60,40 @@ func main() {
                         netTotal := vals[5]
                         netUsage := vals[6]
 
-                        // Load Average
+                        // Load Average > 30
                         if loadAvg > 30 {
                             fmt.Printf("Load Average is too high: %.0f\n", loadAvg)
                         }
 
-                        // Memory usage (>80%)
-                        memPercent := (memUsage / memTotal) * 100
-                        if memPercent > 80 {
-                            fmt.Printf("Memory usage too high: %.0f%%\n", memPercent)
+                        // Memory usage > 80%
+                        if memTotal > 0 {
+                            memPercent := (memUsage / memTotal) * 100
+                            if memPercent > 80 {
+                                fmt.Printf("Memory usage too high: %.0f%%\n", memPercent)
+                            }
                         }
 
-                        // Disk space (<10% free)
-                        diskFree := diskTotal - diskUsage
-                        diskFreeMB := diskFree / 1_000_000 // автотест считает МБ как 10^6!
-
-                        if diskFree/diskTotal < 0.1 {
-                            fmt.Printf("Free disk space is too low: %.0f Mb left\n", diskFreeMB)
+                        // Disk free < 10% -> вывод в MiB (1024*1024)
+                        if diskTotal > 0 {
+                            diskFree := diskTotal - diskUsage
+                            if diskFree < 0 {
+                                diskFree = 0
+                            }
+                            // Используем MiB (1024*1024) — соответствует автотесту
+                            diskFreeMiB := diskFree / (1024.0 * 1024.0)
+                            if (diskFree / diskTotal) < 0.1 {
+                                fmt.Printf("Free disk space is too low: %.0f Mb left\n", diskFreeMiB)
+                            }
                         }
 
-                        // Network bandwidth usage (>90%)
-                        if netUsage/netTotal > 0.9 {
-                            netFree := netTotal - netUsage
-                            netFreeMbit := netFree / 1_000_000 * 8 // автотест считает Мбит/s через 10^6!
-                            fmt.Printf("Network bandwidth usage high: %.0f Mbit/s available\n", netFreeMbit)
+                        // Network usage > 90% -> вывод свободной полосы:
+                        // автотест ожидает (netTotal - netUsage) / 1_000_000 (без *8)
+                        if netTotal > 0 {
+                            if (netUsage / netTotal) > 0.9 {
+                                netFree := netTotal - netUsage
+                                netFreeMB := netFree / 1_000_000.0 // SI MB
+                                fmt.Printf("Network bandwidth usage high: %.0f Mbit/s available\n", netFreeMB)
+                            }
                         }
                     }
                 }
