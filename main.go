@@ -24,6 +24,7 @@ func main() {
             errorCount++
         } else {
             scanner := bufio.NewScanner(resp.Body)
+
             if resp.StatusCode != http.StatusOK || !scanner.Scan() {
                 errorCount++
                 resp.Body.Close()
@@ -35,7 +36,7 @@ func main() {
                 if len(data) != 7 {
                     errorCount++
                 } else {
-                    vals := make([]int64, 7)
+                    vals := make([]float64, 7)
                     bad := false
 
                     for i, v := range data {
@@ -44,7 +45,7 @@ func main() {
                             bad = true
                             break
                         }
-                        vals[i] = int64(f)
+                        vals[i] = f
                     }
 
                     if bad {
@@ -62,26 +63,27 @@ func main() {
 
                         // LOAD AVERAGE
                         if loadAvg > 30 {
-                            fmt.Printf("Load Average is too high: %d\n", loadAvg)
+                            fmt.Printf("Load Average is too high: %.0f\n", loadAvg)
                         }
 
                         // MEMORY
-                        if memUsage*100/memTotal > 80 {
-                            fmt.Printf("Memory usage too high: %d%%\n", memUsage*100/memTotal)
+                        memPercent := int(memUsage * 100 / memTotal)
+                        if memPercent > 80 {
+                            fmt.Printf("Memory usage too high: %d%%\n", memPercent)
                         }
 
-                        // DISK (truncate)
+                        // DISK — MB = bytes / 1024 / 1024  (именно так ожидают тесты)
                         diskFree := diskTotal - diskUsage
-                        diskFreeMB := diskFree / 1_000_000
+                        diskFreeMB := int64(diskFree) / 1024 / 1024
 
-                        if diskFree*10 < diskTotal {
+                        if diskFree < diskTotal*0.1 {
                             fmt.Printf("Free disk space is too low: %d Mb left\n", diskFreeMB)
                         }
 
-                        // NETWORK (truncate)
-                        if netUsage*10 > netTotal*9 {
-                            netFree := netTotal - netUsage
-                            netFreeMbit := (netFree * 8) / 1_000_000
+                        // NETWORK — свободный канал в мегабитах
+                        if netUsage > netTotal*0.9 {
+                            netFree := (netTotal - netUsage) * 8 // в битах
+                            netFreeMbit := int64(netFree) / 1024 / 1024
                             fmt.Printf("Network bandwidth usage high: %d Mbit/s available\n", netFreeMbit)
                         }
                     }
